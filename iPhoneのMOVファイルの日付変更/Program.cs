@@ -23,7 +23,6 @@ namespace iPhoneのMOVファイルの日付変更
                     ProcessFile(new FileInfo(arg));
                 }
             }
-
             Console.ReadLine();
         }
 
@@ -37,21 +36,47 @@ namespace iPhoneのMOVファイルの日付変更
 
         private static void ProcessFile(FileInfo fileInfo)
         {
-            if (fileInfo.Extension.ToLower() != ".mov") return;
-            byte[] fileBytes = File.ReadAllBytes(fileInfo.FullName);
-            var dt = GetRecordingDate(fileBytes);
-            if (dt != null)
+            // 対象の拡張子かをチェック
+            var isNotMovie = true;
+            foreach (var ext in ".mov;.mp4;.m2ts".Split(';'))
+                if (fileInfo.Extension.ToLower() == ext) isNotMovie = false;
+            if (isNotMovie) return;
+
+            DateTime dt;
+            var fileName = fileInfo.Name.Substring(0, fileInfo.Name.Length - fileInfo.Extension.Length);
+
+            // ファイル名で日付判定1
+            if (DateTime.TryParseExact(fileName, "yyyyMMdd_HHmmss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out dt))
             {
-                fileInfo.CreationTime = dt;
-                fileInfo.LastWriteTime = dt;
-                Console.WriteLine("{0} のファイル日付を {1} に変更しました。", fileInfo.Name, dt);
+                SetFileTime(fileInfo, dt);
+                return;
+            }
+
+            // ファイル名で日付判定2
+            if (DateTime.TryParseExact(fileName, "yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out dt))
+            {
+                SetFileTime(fileInfo, dt);
+                return;
+            }
+
+            // バイナリで日付判定
+            byte[] fileBytes = File.ReadAllBytes(fileInfo.FullName);
+            if (GetRecordingDate(fileBytes, out dt))
+            {
+                SetFileTime(fileInfo, dt);
+                return;
             }
         }
 
-        private static DateTime GetRecordingDate(byte[] fileBytes)
+        private static void SetFileTime(FileInfo fileInfo, DateTime dt)
         {
-            var dt = new DateTime();
+            fileInfo.CreationTime = dt;
+            fileInfo.LastWriteTime = dt;
+            Console.WriteLine("{0} のファイル日付を {1} に変更しました。", fileInfo.Name, dt);
+        }
 
+        private static bool GetRecordingDate(byte[] fileBytes, out DateTime dt)
+        {
             var searchData = new List<byte>();
             foreach (var hex in "64 61 74 61 00 00 00 01 4A 50 2A 0E 32 30".Split(' '))
             {
@@ -78,11 +103,11 @@ namespace iPhoneのMOVファイルの日付変更
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.None,
                         out dt);
-                    break;
+                    return true;
                 }
             }
-            return dt;
+            dt = new DateTime();
+            return false;
         }
-
     }
 }
